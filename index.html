@@ -8,10 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
-    <!-- Firebase SDK (Version 9 Compatibility Layer) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
     <style>
 :root{
@@ -259,7 +255,7 @@ html, body {
         </header>
 
         <div class="cb" id="cb">
-            <div class="enc"><i class="fa-solid fa-shield-halved"></i> <b>24/7 Cloud Sync:</b> Works permanently without PC. Blue Tick when Read.</div>
+            <div class="enc"><i class="fa-solid fa-shield-halved"></i> <b>24/7 Cloud Sync:</b> Works on GitHub Pages! Blue Tick when Read.</div>
             <div class="emp" id="emp" style="display:none">
                 <div class="ei"><i class="fa-brands fa-whatsapp"></i></div>
                 <h2>WhatsApp Chat</h2>
@@ -299,15 +295,8 @@ html, body {
 
 <script>
 (function(){
-    // Firebase Realtime Database Configuration (Public Free Tier Instance)
-    const firebaseConfig = {
-        databaseURL: "https://chat-demo-p2p-default-rtdb.firebaseio.com"
-    };
-
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.database();
+    const NTFY = 'https://ntfy.sh';
+    const POLL_MS = 1200;
 
     let uid = localStorage.getItem('wa_uid');
     if(!uid){ 
@@ -316,8 +305,10 @@ html, body {
     }
 
     let room = new URLSearchParams(location.search).get('room') || 'my-secret-room';
-    const roomRef = db.ref('rooms/' + room);
+    const TOPIC = 'wa2p_' + room.replace(/[^a-zA-Z0-9_-]/g, '_');
+
     let renderedIds = new Set();
+    let readReceiptsMap = new Set(); // Stores message IDs read by partner
 
     const shareUrl = location.origin + location.pathname + '?room=' + room;
 
@@ -365,19 +356,16 @@ html, body {
 
     $('clrbtn').onclick = ()=>{
         if(!confirm('Clear chat history?')) return;
-        roomRef.remove();
         $('msgs').innerHTML='';
         renderedIds.clear();
+        readReceiptsMap.clear();
     };
 
     function getTickHtml(d, pending){
         if(pending) {
             return `<span class="tick-clock" title="Sending..."><i class="fa-regular fa-clock"></i></span>`;
         }
-        const readBy = d.readBy || {};
-        const readUserIds = Object.keys(readBy);
-        const isReadByPartner = readUserIds.some(id => id !== d.uid);
-        if(isReadByPartner) {
+        if(readReceiptsMap.has(d.id)) {
             return `<span class="tick-blue" title="Read"><i class="fa-solid fa-check-double"></i></span>`;
         } else {
             return `<span class="tick-gray" title="Delivered"><i class="fa-solid fa-check-double"></i></span>`;
@@ -424,58 +412,104 @@ html, body {
     }
 
     function send(payload){
-        const msgRef = roomRef.child('messages').push();
-        const msgId = msgRef.key;
-        
-        payload.id   = msgId;
-        payload.uid  = uid;
-        payload.room = room;
-        payload.ts   = firebase.database.ServerValue.TIMESTAMP;
-        payload.readBy = {};
-        payload.readBy[uid] = true;
+        const msgId = 'msg_' + uid + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+        payload.id     = msgId;
+        payload.uid    = uid;
+        payload.room   = room;
+        payload.action = 'send';
 
         appendMsg(payload, true);
-
-        msgRef.set(payload).then(()=>{
-            updateTick(payload);
-        }).catch(err=>console.error("Send error:", err));
+        doSend(payload);
     }
 
-    // Realtime Firebase Event Listener (Push Notifications / Instant 2-way sync)
-    roomRef.child('messages').on('child_added', snapshot => {
-        const d = snapshot.val();
-        if(!d) return;
+    function doSend(payload){
+        fetch(NTFY + '/' + TOPIC, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+        }).then(r=>r.json()).then(res=>{
+            if(res.id) updateTick(payload);
+        }).catch(e=>console.error('Send error:', e));
+    }
 
-        // Automatically mark partner's message as READ
-        if(d.uid !== uid) {
-            if(!d.readBy || !d.readBy[uid]) {
-                roomRef.child('messages/' + snapshot.key + '/readBy/' + uid).set(true);
+    function sendReadReceipt(msgIds){
+        if(!msgIds || msgIds.length === 0) return;
+        const readEvt = {
+            action: 'read',
+            uid: uid,
+            room: room,
+            readIds: msgIds
+        };
+        fetch(NTFY + '/' + TOPIC, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(readEvt)
+        });
+    }
+
+    function poll(){
+        fetch(`${NTFY}/${TOPIC}/json?poll=1&since=24h`)
+        .then(r=>r.text())
+        .then(text=>{
+            const lines = text.trim().split('\n').filter(Boolean);
+            const unreadPartnerMsgIds = [];
+
+            lines.forEach(line=>{
+                try{
+                    const evt = JSON.parse(line);
+                    if(evt.event !== 'message') return;
+
+                    let d;
+                    try{ d = JSON.parse(evt.message); } catch(e){ return; }
+
+                    if(d.room !== room) return;
+
+                    // Handle Read Receipts Action
+                    if(d.action === 'read') {
+                        if(d.uid !== uid && d.readIds) {
+                            d.readIds.forEach(id => readReceiptsMap.add(id));
+                        }
+                        return;
+                    }
+
+                    // Handle Message Action
+                    if(d.action === 'send') {
+                        if(d.uid !== uid) {
+                            unreadPartnerMsgIds.push(d.id);
+                        }
+                        appendMsg(d, false);
+                    }
+                }catch(e){}
+            });
+
+            // If partner sent messages, mark them as READ
+            if(unreadPartnerMsgIds.length > 0) {
+                sendReadReceipt(unreadPartnerMsgIds);
             }
-        }
-        appendMsg(d, false);
-    });
 
-    roomRef.child('messages').on('child_changed', snapshot => {
-        const d = snapshot.val();
-        if(d) updateTick(d);
-    });
+            // Update tick status for all rendered sent messages
+            renderedIds.forEach(id => {
+                const row = document.getElementById('row-' + id);
+                if(row && row.classList.contains('sent') && readReceiptsMap.has(id)) {
+                    const el = document.getElementById('tick-' + id);
+                    if(el) el.innerHTML = `<span class="tick-blue" title="Read"><i class="fa-solid fa-check-double"></i></span>`;
+                }
+            });
 
-    // Network connection status indicator
-    db.ref('.info/connected').on('value', snap => {
-        if (snap.val() === true) {
             $('bnri').className  = 'fa-solid fa-circle-check';
             $('bnrt').textContent = '24/7 Cloud Sync Active';
             $('bnrs').textContent = 'Live message delivery active';
             $('chs').textContent  = 'Online';
             $('pbdg').classList.remove('off');
-        } else {
+        })
+        .catch(()=>{
             $('bnri').className  = 'fa-solid fa-cloud-arrow-up';
-            $('bnrt').textContent = 'Connecting to Cloud...';
+            $('bnrt').textContent = 'Connecting...';
             $('bnrs').textContent = 'Offline queue active';
             $('chs').textContent  = 'Offline';
             $('pbdg').classList.add('off');
-        }
-    });
+        });
+    }
 
     function handleSend(){
         const v = $('msgin').value.trim();
@@ -496,6 +530,10 @@ html, body {
         r.readAsDataURL(f);
         e.target.value='';
     };
+
+    poll();
+    setInterval(poll, POLL_MS);
+    window.addEventListener('online', ()=>{ poll(); });
 })();
 </script>
 </body>
