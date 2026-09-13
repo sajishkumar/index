@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>WhatsApp Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Firebase SDK (Version 9 Compatibility Layer) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+    <style>
+:root{
+    --bg:#0c1317;--panel:#111b21;--hdr:#202c33;--chat:#0b141a;
+    --input:#2a3942;
+    --sent-bg:#005c4b; --sent-txt:#ffffff;
+    --recv-bg:#1f2c34; --recv-txt:#e9edef;
+    --txt:#e9edef;--txt2:#8696a0;--txt3:#667781;
+    --grn:#00a884;--grn2:#06cf9c;--bdr:#222d34;
+    --fn:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.lt{
+    --bg:#e1e9eb;--panel:#fff;--hdr:#f0f2f5;--chat:#efeae2;--input:#fff;
+    --sent-bg:#d9fdd3; --sent-txt:#111b21;
+    --recv-bg:#ffffff; --recv-txt:#111b21;
+    --txt:#111b21;--txt2:#667781;--bdr:#e9edef;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    height: -webkit-fill-available;
+    height: 100dvh;
+    overflow: hidden;
+    font-family: var(--fn);
+    background: var(--bg);
+    color: var(--txt);
+}
+.app{
+    display:flex;
+    width:100%;
+    height:100%;
+    height: -webkit-fill-available;
+    height:100dvh;
+    background:var(--panel);
+    overflow:hidden;
+    position:relative;
+}
+.sb{width:360px;min-width:290px;background:var(--panel);border-right:1px solid var(--bdr);display:flex;flex-direction:column;}
+.sbh{height:60px;background:var(--hdr);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr);}
+.av{width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid var(--grn);}
+.av img{width:100%;height:100%;object-fit:cover;}
+.has{display:flex;gap:8px;}
+.ib{background:transparent;border:none;color:var(--txt2);width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;transition:all .2s;}
+.ib:hover{background:var(--hdr);color:var(--txt);}
+.bnr{background:linear-gradient(135deg,rgba(0,168,132,.15),rgba(0,92,75,.25));border-bottom:1px solid var(--bdr);padding:12px 16px;display:flex;align-items:center;gap:12px;}
+.bni{width:34px;height:34px;border-radius:50%;background:var(--grn);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.bnt{font-size:.88rem;font-weight:600;}
+.bns{font-size:.75rem;color:var(--txt2);}
+.cl{flex:1;overflow-y:auto;padding:8px 0;}
+.clh{padding:8px 16px;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--txt3);}
+.ci{display:flex;align-items:center;padding:12px 16px;gap:12px;cursor:pointer;background:var(--hdr);}
+.cia{position:relative;width:48px;height:48px;border-radius:50%;flex-shrink:0;}
+.cia img{width:100%;height:100%;border-radius:50%;}
+.ob{position:absolute;bottom:2px;right:2px;width:12px;height:12px;border-radius:50%;border:2px solid var(--panel);background:var(--grn);}
+.ob.off{background:var(--txt3);}
+.cii{flex:1;overflow:hidden;}
+.cit{display:flex;justify-content:space-between;margin-bottom:3px;}
+.cin{font-weight:600;font-size:.92rem;}
+.cit2{font-size:.72rem;color:var(--txt3);}
+.cim{font-size:.8rem;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.spp{padding:14px 16px;background:var(--hdr);border-top:1px solid var(--bdr);display:flex;flex-direction:column;gap:10px;}
+.spt{font-size:.8rem;font-weight:600;color:var(--txt2);display:flex;align-items:center;gap:8px;}
+.spr{display:flex;gap:8px;}
+.spr input{flex:1;background:var(--input);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;color:var(--txt);outline:none;font-size:.8rem;}
+.bp{background:var(--grn);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:.82rem;}
+.bp:hover{background:var(--grn2);}
+.bs{background:var(--input);color:var(--txt);border:1px solid var(--bdr);border-radius:8px;padding:7px 13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:.82rem;}
+
+.mn{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    background:var(--chat);
+    height:100%;
+    height: -webkit-fill-available;
+    height:100dvh;
+    overflow:hidden;
+    position:relative;
+}
+.ch{height:60px;min-height:60px;background:var(--hdr);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr);flex-shrink:0;}
+.bkb{display:none;}
+.chu{display:flex;align-items:center;gap:12px;}
+.chu img{width:38px;height:38px;border-radius:50%;}
+.chn{font-size:.92rem;font-weight:600;}
+.chs{font-size:.75rem;color:var(--txt2);}
+
+.cb{
+    flex:1;
+    overflow-y:auto;
+    padding:14px 4%;
+    display:flex;
+    flex-direction:column;
+    background-image:radial-gradient(var(--bdr) 1px,transparent 1px);
+    background-size:24px 24px;
+    -webkit-overflow-scrolling: touch;
+}
+.enc{align-self:center;background:rgba(18,27,34,.9);border:1px solid rgba(255,255,255,.05);color:#ffd27d;font-size:.73rem;padding:7px 14px;border-radius:8px;margin-bottom:14px;text-align:center;max-width:90%;}
+.emp{margin:auto;text-align:center;max-width:380px;display:flex;flex-direction:column;align-items:center;}
+.ei{font-size:3.5rem;color:var(--grn);margin-bottom:14px;}
+.emp h2{font-size:1.2rem;margin-bottom:8px;}
+.emp p{font-size:.85rem;color:var(--txt2);line-height:1.5;}
+.bpl{background:var(--grn);color:#fff;border:none;border-radius:24px;padding:11px 22px;font-size:.92rem;font-weight:600;cursor:pointer;margin-top:14px;}
+.msgs{display:flex;flex-direction:column;gap:8px;width:100%;}
+.mr{display:flex;width:100%;margin-bottom:2px;}
+.mr.sent{justify-content:flex-end;}
+.mr.recv{justify-content:flex-start;}
+
+.mb{max-width:82%;padding:8px 12px;border-radius:12px;font-size:.95rem;line-height:1.45;word-break:break-word;position:relative;box-shadow:0 1px 2px rgba(0,0,0,.3);}
+.mr.sent .mb{background:var(--sent-bg);color:var(--sent-txt);border-top-right-radius:2px;border:1px solid rgba(0,168,132,.3);}
+.mr.recv .mb{background:var(--recv-bg);color:var(--recv-txt);border-top-left-radius:2px;border:1px solid rgba(255,255,255,.08);}
+
+.sender-tag{font-size:.72rem;font-weight:700;color:#53bdeb;margin-bottom:3px;display:block;}
+.mm{display:flex;align-items:center;justify-content:flex-end;gap:3px;font-size:.66rem;opacity:.85;margin-top:4px;float:right;margin-left:12px;}
+
+/* Tick Styling */
+.tick-clock{color:#8696a0;}
+.tick-gray{color:#8696a0;font-weight:normal;}
+.tick-blue{color:#34b7f1;font-weight:bold;}
+
+.mi{max-width:100%;max-height:260px;border-radius:8px;cursor:pointer;margin-top:3px;display:block;}
+
+.cf{
+    background:var(--hdr);
+    padding:8px 10px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    border-top:1px solid var(--bdr);
+    flex-shrink:0;
+    width:100%;
+    z-index:20;
+    position:relative;
+}
+.ifb{display:flex;align-items:center;gap:8px;width:100%;}
+.iw{
+    flex:1;
+    background:var(--input);
+    border-radius:24px;
+    padding:4px 14px;
+    display:flex;
+    align-items:center;
+    border:1px solid var(--bdr);
+}
+.iw input[type="text"]{
+    width:100%;
+    background:transparent;
+    border:none;
+    color:var(--txt);
+    font-size:16px;
+    font-family:inherit;
+    outline:none;
+    height:42px;
+    padding:0;
+}
+.sndb{
+    background:var(--grn)!important;
+    color:#fff!important;
+    flex-shrink:0;
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.mov{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.mc{background:var(--panel);border:1px solid var(--bdr);border-radius:12px;width:90%;max-width:400px;overflow:hidden;}
+.mh{padding:15px 18px;background:var(--hdr);border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;}
+.mx{background:none;border:none;color:var(--txt2);font-size:1.4rem;cursor:pointer;}
+.mb2{padding:18px;display:flex;flex-direction:column;align-items:center;}
+#qrc{background:#fff;padding:12px;border-radius:8px;margin-bottom:14px;}
+.ub{font-size:.76rem;background:var(--input);padding:8px 12px;border-radius:8px;word-break:break-all;color:var(--grn);width:100%;text-align:center;}
+
+.lb{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center;z-index:2000;}
+.lbx{position:absolute;top:18px;right:26px;color:#fff;font-size:2.2rem;cursor:pointer;}
+#lbi{max-width:92vw;max-height:92vh;object-fit:contain;}
+
+@media(max-width:700px){
+    .sb{width:100%;position:absolute;height:100%;left:0;top:0;z-index:100;display:none;}
+    .app.show-sidebar .sb{display:flex;}
+    .bkb{display:flex!important;}
+}
+    </style>
+</head>
+<body>
+<div class="app sc" id="app">
+    <aside class="sb">
+        <header class="sbh">
+            <div class="av"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=me" id="myav"></div>
+            <div class="has">
+                <button class="ib" id="thmbtn" title="Theme"><i class="fa-solid fa-moon"></i></button>
+                <button class="ib" id="shrbtn" title="Share"><i class="fa-solid fa-user-plus"></i></button>
+            </div>
+        </header>
+        <div class="bnr">
+            <div class="bni"><i class="fa-solid fa-cloud" id="bnri"></i></div>
+            <div>
+                <div class="bnt" id="bnrt">24/7 Cloud Sync Active</div>
+                <div class="bns" id="bnrs">No server or PC needed</div>
+            </div>
+        </div>
+        <div class="cl">
+            <div class="clh">Direct Chat (2 People)</div>
+            <div class="ci" id="ci">
+                <div class="cia">
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=partner" id="pav">
+                    <span class="ob off" id="pbdg"></span>
+                </div>
+                <div class="cii">
+                    <div class="cit">
+                        <span class="cin" id="pnm">Partner Chat</span>
+                        <span class="cit2" id="ptm">--:--</span>
+                    </div>
+                    <div class="cim" id="pmsg">Cloud synced chat room</div>
+                </div>
+            </div>
+        </div>
+        <div class="spp">
+            <div class="spt"><i class="fa-solid fa-link"></i> Invite Second Person</div>
+            <div class="spr">
+                <input type="text" id="surl" readonly value="Generating...">
+                <button class="bp" id="cpybtn"><i class="fa-regular fa-copy"></i> Copy</button>
+            </div>
+            <button class="bs" id="qrbtn"><i class="fa-solid fa-qrcode"></i> QR Code</button>
+        </div>
+    </aside>
+
+    <main class="mn">
+        <header class="ch">
+            <button class="ib bkb" id="bkbtn" title="Show Menu"><i class="fa-solid fa-bars"></i></button>
+            <div class="chu">
+                <img src="https://api.dicebear.com/7.x/bottts/svg?seed=partner">
+                <div>
+                    <div class="chn" id="chn">Partner Chat</div>
+                    <div class="chs" id="chs">Online</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:4px">
+                <button class="ib" id="top-shrbtn" title="Share Link"><i class="fa-solid fa-user-plus"></i></button>
+                <button class="ib" id="clrbtn" title="Clear Chat"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        </header>
+
+        <div class="cb" id="cb">
+            <div class="enc"><i class="fa-solid fa-shield-halved"></i> <b>24/7 Cloud Sync:</b> Works permanently without PC. Blue Tick when Read.</div>
+            <div class="emp" id="emp" style="display:none">
+                <div class="ei"><i class="fa-brands fa-whatsapp"></i></div>
+                <h2>WhatsApp Chat</h2>
+                <p>Type a message below to send!</p>
+            </div>
+            <div class="msgs" id="msgs"></div>
+        </div>
+
+        <footer class="cf">
+            <div class="ifb">
+                <label class="ib" title="Attach Photo">
+                    <i class="fa-solid fa-image"></i>
+                    <input type="file" id="fin" accept="image/*" style="display:none">
+                </label>
+                <div class="iw">
+                    <input type="text" id="msgin" placeholder="Type a message..." autocomplete="off" autocorrect="off" autocapitalize="sentences">
+                </div>
+                <button class="ib sndb" id="sndbtn" title="Send Message"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </footer>
+    </main>
+</div>
+
+<!-- QR Modal -->
+<div class="mov" id="qrmod" style="display:none">
+    <div class="mc">
+        <div class="mh"><h3>Scan to Join Chat</h3><button class="mx" id="cqr">&times;</button></div>
+        <div class="mb2"><div id="qrc"></div><div class="ub" id="qrurl"></div></div>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lb" id="lb" style="display:none">
+    <span class="lbx" id="lbx">&times;</span>
+    <img id="lbi" src="" alt="">
+</div>
+
+<script>
+(function(){
+    // Firebase Realtime Database Configuration (Public Free Tier Instance)
+    const firebaseConfig = {
+        databaseURL: "https://chat-demo-p2p-default-rtdb.firebaseio.com"
+    };
+
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    let uid = localStorage.getItem('wa_uid');
+    if(!uid){ 
+        uid = 'u_' + Math.random().toString(36).substr(2,7) + '_' + Date.now().toString(36); 
+        localStorage.setItem('wa_uid', uid); 
+    }
+
+    let room = new URLSearchParams(location.search).get('room') || 'my-secret-room';
+    const roomRef = db.ref('rooms/' + room);
+    let renderedIds = new Set();
+
+    const shareUrl = location.origin + location.pathname + '?room=' + room;
+
+    const $ = id => document.getElementById(id);
+    const E = (t,c,h) => { const e=document.createElement(t); if(c) e.className=c; if(h) e.innerHTML=h; return e; };
+    function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+    function ts(){ return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+    $('surl').value = shareUrl;
+    $('qrurl').textContent = shareUrl;
+
+    $('thmbtn').onclick = ()=>{
+        document.body.classList.toggle('lt');
+        const lt = document.body.classList.contains('lt');
+        $('thmbtn').innerHTML = `<i class="fa-solid fa-${lt?'sun':'moon'}"></i>`;
+        localStorage.setItem('wa_th', lt?'l':'d');
+    };
+    if(localStorage.getItem('wa_th')==='l') document.body.classList.add('lt');
+
+    const copy = ()=>{
+        if(navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(shareUrl).then(()=>
+                alert('✅ Link Copied!\n\nShare with 2nd phone:\n' + shareUrl)
+            );
+        } else {
+            prompt('Copy this link:', shareUrl);
+        }
+    };
+    $('cpybtn').onclick = copy;
+    $('shrbtn').onclick = copy;
+    $('top-shrbtn').onclick = copy;
+
+    $('qrbtn').onclick = ()=>{
+        $('qrc').innerHTML='';
+        new QRCode($('qrc'),{text:shareUrl,width:170,height:170});
+        $('qrmod').style.display='flex';
+    };
+    $('cqr').onclick = ()=>$('qrmod').style.display='none';
+
+    $('lbx').onclick = ()=>$('lb').style.display='none';
+    window.openLb = src => { $('lbi').src=src; $('lb').style.display='flex'; };
+
+    $('bkbtn').onclick = ()=>$('app').classList.toggle('show-sidebar');
+    $('ci').onclick    = ()=>$('app').classList.remove('show-sidebar');
+
+    $('clrbtn').onclick = ()=>{
+        if(!confirm('Clear chat history?')) return;
+        roomRef.remove();
+        $('msgs').innerHTML='';
+        renderedIds.clear();
+    };
+
+    function getTickHtml(d, pending){
+        if(pending) {
+            return `<span class="tick-clock" title="Sending..."><i class="fa-regular fa-clock"></i></span>`;
+        }
+        const readBy = d.readBy || {};
+        const readUserIds = Object.keys(readBy);
+        const isReadByPartner = readUserIds.some(id => id !== d.uid);
+        if(isReadByPartner) {
+            return `<span class="tick-blue" title="Read"><i class="fa-solid fa-check-double"></i></span>`;
+        } else {
+            return `<span class="tick-gray" title="Delivered"><i class="fa-solid fa-check-double"></i></span>`;
+        }
+    }
+
+    function updateTick(d){
+        const el = document.getElementById('tick-' + d.id);
+        if(el) {
+            el.innerHTML = getTickHtml(d, false);
+        }
+    }
+
+    function appendMsg(d, pending){
+        if(!d.id) return;
+
+        if(document.getElementById('row-' + d.id)) {
+            updateTick(d);
+            return;
+        }
+
+        renderedIds.add(d.id);
+        $('emp').style.display = 'none';
+
+        const isMe = d.uid === uid;
+        const row = E('div', 'mr ' + (isMe ? 'sent' : 'recv'));
+        row.id = 'row-' + d.id;
+
+        const tickHtml = isMe ? getTickHtml(d, pending) : '';
+        const senderHeader = isMe ? '' : `<span class="sender-tag"><i class="fa-solid fa-user"></i> Partner</span>`;
+
+        let body = '';
+        if(d.type==='text')  body = `<div>${esc(d.text)}</div>`;
+        if(d.type==='image') body = `<img src="${d.img}" class="mi" onclick="openLb(this.src)">`;
+
+        const bbl = E('div', 'mb');
+        bbl.innerHTML = `${senderHeader}${body}<div class="mm"><span>${d.time}</span><span id="tick-${d.id}">${tickHtml}</span></div>`;
+        row.appendChild(bbl);
+        $('msgs').appendChild(row);
+        $('cb').scrollTop = $('cb').scrollHeight;
+
+        $('pmsg').textContent = (isMe ? 'You: ' : 'Partner: ') + (d.type==='image'?'📷 Photo': d.text);
+        $('ptm').textContent  = d.time;
+    }
+
+    function send(payload){
+        const msgRef = roomRef.child('messages').push();
+        const msgId = msgRef.key;
+        
+        payload.id   = msgId;
+        payload.uid  = uid;
+        payload.room = room;
+        payload.ts   = firebase.database.ServerValue.TIMESTAMP;
+        payload.readBy = {};
+        payload.readBy[uid] = true;
+
+        appendMsg(payload, true);
+
+        msgRef.set(payload).then(()=>{
+            updateTick(payload);
+        }).catch(err=>console.error("Send error:", err));
+    }
+
+    // Realtime Firebase Event Listener (Push Notifications / Instant 2-way sync)
+    roomRef.child('messages').on('child_added', snapshot => {
+        const d = snapshot.val();
+        if(!d) return;
+
+        // Automatically mark partner's message as READ
+        if(d.uid !== uid) {
+            if(!d.readBy || !d.readBy[uid]) {
+                roomRef.child('messages/' + snapshot.key + '/readBy/' + uid).set(true);
+            }
+        }
+        appendMsg(d, false);
+    });
+
+    roomRef.child('messages').on('child_changed', snapshot => {
+        const d = snapshot.val();
+        if(d) updateTick(d);
+    });
+
+    // Network connection status indicator
+    db.ref('.info/connected').on('value', snap => {
+        if (snap.val() === true) {
+            $('bnri').className  = 'fa-solid fa-circle-check';
+            $('bnrt').textContent = '24/7 Cloud Sync Active';
+            $('bnrs').textContent = 'Live message delivery active';
+            $('chs').textContent  = 'Online';
+            $('pbdg').classList.remove('off');
+        } else {
+            $('bnri').className  = 'fa-solid fa-cloud-arrow-up';
+            $('bnrt').textContent = 'Connecting to Cloud...';
+            $('bnrs').textContent = 'Offline queue active';
+            $('chs').textContent  = 'Offline';
+            $('pbdg').classList.add('off');
+        }
+    });
+
+    function handleSend(){
+        const v = $('msgin').value.trim();
+        if(!v) return;
+        send({ type:'text', text:v, time:ts() });
+        $('msgin').value = '';
+    }
+
+    $('sndbtn').onclick = handleSend;
+    $('msgin').addEventListener('keydown', e=>{
+        if(e.key==='Enter'){ e.preventDefault(); handleSend(); }
+    });
+
+    $('fin').onchange = e=>{
+        const f = e.target.files[0]; if(!f) return;
+        const r = new FileReader();
+        r.onload = ev=>send({ type:'image', img:ev.target.result, time:ts() });
+        r.readAsDataURL(f);
+        e.target.value='';
+    };
+})();
+</script>
+</body>
+</html>
