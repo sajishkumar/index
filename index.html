@@ -208,8 +208,8 @@ html, body {
         <div class="bnr">
             <div class="bni"><i class="fa-solid fa-cloud" id="bnri"></i></div>
             <div>
-                <div class="bnt" id="bnrt">24/7 Cloud Sync Active</div>
-                <div class="bns" id="bnrs">No server or PC needed</div>
+                <div class="bnt" id="bnrt">Ultra-Fast 24/7 Sync</div>
+                <div class="bns" id="bnrs">Instant delivery active</div>
             </div>
         </div>
         <div class="cl">
@@ -250,12 +250,12 @@ html, body {
             </div>
             <div style="display:flex;gap:4px">
                 <button class="ib" id="top-shrbtn" title="Share Link"><i class="fa-solid fa-user-plus"></i></button>
-                <button class="ib" id="clrbtn" title="Clear Chat"><i class="fa-solid fa-trash-can"></i></button>
+                <button class="ib" id="clrbtn" title="Clear Chat History"><i class="fa-solid fa-trash-can"></i></button>
             </div>
         </header>
 
         <div class="cb" id="cb">
-            <div class="enc"><i class="fa-solid fa-shield-halved"></i> <b>24/7 Cloud Sync:</b> Works on GitHub Pages! Blue Tick when Read.</div>
+            <div class="enc"><i class="fa-solid fa-shield-halved"></i> <b>Instant Messaging:</b> Ultra-fast 0.6s delivery. Blue Tick when Read.</div>
             <div class="emp" id="emp" style="display:none">
                 <div class="ei"><i class="fa-brands fa-whatsapp"></i></div>
                 <h2>WhatsApp Chat</h2>
@@ -296,7 +296,7 @@ html, body {
 <script>
 (function(){
     const NTFY = 'https://ntfy.sh';
-    const POLL_MS = 1200;
+    const FAST_POLL_MS = 600; // Ultra-fast 0.6s sub-second sync
 
     let uid = localStorage.getItem('wa_uid');
     if(!uid){ 
@@ -308,7 +308,8 @@ html, body {
     const TOPIC = 'wa2p_' + room.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     let renderedIds = new Set();
-    let readReceiptsMap = new Set(); // Stores message IDs read by partner
+    let readReceiptsMap = new Set();
+    let clearCutoffTime = parseInt(localStorage.getItem('wa_clr_' + room) || '0');
 
     const shareUrl = location.origin + location.pathname + '?room=' + room;
 
@@ -354,8 +355,28 @@ html, body {
     $('bkbtn').onclick = ()=>$('app').classList.toggle('show-sidebar');
     $('ci').onclick    = ()=>$('app').classList.remove('show-sidebar');
 
+    // 2-Way Working Clear Chat (Deletes on BOTH phones)
     $('clrbtn').onclick = ()=>{
-        if(!confirm('Clear chat history?')) return;
+        if(!confirm('Clear all chat history for both users?')) return;
+        const nowMs = Date.now();
+        clearCutoffTime = nowMs;
+        localStorage.setItem('wa_clr_' + room, nowMs);
+
+        const clearEvt = {
+            action: 'clear',
+            uid: uid,
+            room: room,
+            clearTs: nowMs
+        };
+
+        // Broadcast clear event to ntfy.sh
+        fetch(NTFY + '/' + TOPIC, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(clearEvt)
+        });
+
+        // Instant local screen clear
         $('msgs').innerHTML='';
         renderedIds.clear();
         readReceiptsMap.clear();
@@ -380,7 +401,12 @@ html, body {
     }
 
     function appendMsg(d, pending){
-        if(!d.id) return;
+        if(!d.id) {
+            d.id = 'srv_' + (d.createdTs || Date.now()) + '_' + (d.uid || 'anon');
+        }
+
+        // Skip messages sent before clear cutoff
+        if(d.createdTs && d.createdTs < clearCutoffTime) return;
 
         if(document.getElementById('row-' + d.id)) {
             updateTick(d);
@@ -412,11 +438,13 @@ html, body {
     }
 
     function send(payload){
-        const msgId = 'msg_' + uid + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
-        payload.id     = msgId;
-        payload.uid    = uid;
-        payload.room   = room;
-        payload.action = 'send';
+        const nowMs = Date.now();
+        const msgId = 'msg_' + uid + '_' + nowMs + '_' + Math.random().toString(36).substr(2,5);
+        payload.id        = msgId;
+        payload.uid       = uid;
+        payload.room      = room;
+        payload.createdTs = nowMs;
+        payload.action    = 'send';
 
         appendMsg(payload, true);
         doSend(payload);
@@ -429,6 +457,7 @@ html, body {
             body: JSON.stringify(payload)
         }).then(r=>r.json()).then(res=>{
             if(res.id) updateTick(payload);
+            poll(); // Trigger immediate fast poll after sending
         }).catch(e=>console.error('Send error:', e));
     }
 
@@ -464,6 +493,18 @@ html, body {
 
                     if(d.room !== room) return;
 
+                    // Handle Clear Action Event from any user
+                    if(d.action === 'clear') {
+                        if(d.clearTs && d.clearTs > clearCutoffTime) {
+                            clearCutoffTime = d.clearTs;
+                            localStorage.setItem('wa_clr_' + room, d.clearTs);
+                            $('msgs').innerHTML='';
+                            renderedIds.clear();
+                            readReceiptsMap.clear();
+                        }
+                        return;
+                    }
+
                     // Handle Read Receipts Action
                     if(d.action === 'read') {
                         if(d.uid !== uid && d.readIds) {
@@ -482,12 +523,12 @@ html, body {
                 }catch(e){}
             });
 
-            // If partner sent messages, mark them as READ
+            // Mark partner's messages as READ
             if(unreadPartnerMsgIds.length > 0) {
                 sendReadReceipt(unreadPartnerMsgIds);
             }
 
-            // Update tick status for all rendered sent messages
+            // Update tick status for sent messages
             renderedIds.forEach(id => {
                 const row = document.getElementById('row-' + id);
                 if(row && row.classList.contains('sent') && readReceiptsMap.has(id)) {
@@ -497,8 +538,8 @@ html, body {
             });
 
             $('bnri').className  = 'fa-solid fa-circle-check';
-            $('bnrt').textContent = '24/7 Cloud Sync Active';
-            $('bnrs').textContent = 'Live message delivery active';
+            $('bnrt').textContent = 'Ultra-Fast 24/7 Sync';
+            $('bnrs').textContent = 'Sub-second delivery active';
             $('chs').textContent  = 'Online';
             $('pbdg').classList.remove('off');
         })
@@ -532,7 +573,7 @@ html, body {
     };
 
     poll();
-    setInterval(poll, POLL_MS);
+    setInterval(poll, FAST_POLL_MS);
     window.addEventListener('online', ()=>{ poll(); });
 })();
 </script>
